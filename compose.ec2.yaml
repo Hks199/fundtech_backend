@@ -1,0 +1,20 @@
+services:
+  api:
+    build: .
+    image: fifo-inventory-backend:local
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    ports:
+      - '127.0.0.1:3000:3000'
+    restart: unless-stopped
+    init: true
+
+  consumer:
+    image: fifo-inventory-backend:local
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    command: ['node', 'dist/src/consumer.js']
+    restart: unless-stopped
+    init: true

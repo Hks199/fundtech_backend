@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.npm-cache/
+.env
+coverage/
+*.log
+# Local managed-service credentials
+service.key
+service.cert
+ca.pem
+*.key
+*.cert
+.neon

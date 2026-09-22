@@ -1,0 +1,45 @@
+{
+  "name": "fifo-inventory-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "setup:local": "node dist/scripts/setup-local.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/src/server.js",
+    "start:consumer": "node dist/src/consumer.js",
+    "db:migrate": "node dist/scripts/migrate.js",
+    "db:check": "node dist/scripts/check-db.js",
+    "kafka:setup": "node dist/scripts/kafka-setup.js",
+    "simulate": "node dist/scripts/simulate.js",
+    "auth:hash": "node dist/scripts/hash-password.js",
+    "test": "npm run build && node --test --test-isolation=none dist/test/api.test.js dist/test/fifo.test.js"
+  },
+  "dependencies": {
+    "@neon/config": "^1.7.2",
+    "@neon/env": "^1.4.3",
+    "cors": "^2.8.5",
+    "decimal.js": "^10.6.0",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "jose": "^6.1.0",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.16.3",
+    "pino": "^9.13.0",
+    "pino-http": "^10.5.0",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
+    "typescript": "^7.0.2"
+  }
+}
