@@ -77,6 +77,8 @@ The API logs structured JSON with request IDs and redacts authorization headers.
 
 ### Docker image and EC2
 
+For automated deployment, follow [EC2 with GitHub Actions](docs/ec2-github-actions.md). The included `.github/workflows/deploy.yml` tests pushes to `dev-1` and deploys both the API and Kafka consumer to your configured EC2 host. One-time Ubuntu provisioning and Nginx templates are in `deploy/`. Docker Compose 2.30+ is required; use unquoted values in the production `.env` because it is read in raw mode.
+
 `Dockerfile` builds one image for both processes. The API is the default command; `compose.ec2.yaml` runs the same image a second time with the consumer command. Docker Compose's restart policy keeps each process running after failures or host restarts.
 
 On EC2, create an `.env` with production secrets and reachable PostgreSQL and Kafka addresses. The local values `localhost:15432` and `localhost:9092` refer to the container itself when used inside Docker and will not reach the host services. Set `NODE_ENV=production`, `DATABASE_SSL=true`, and `KAFKA_SSL=true`; the production Compose file sets `NODE_ENV` for both services. Use a reverse proxy on the EC2 host for HTTPS; the API container binds to host loopback port 3000.

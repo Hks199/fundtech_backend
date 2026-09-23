@@ -1,0 +1,75 @@
+name: Deploy backend to EC2
+
+on:
+  push:
+    branches: [dev-1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ec2-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --include=dev
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/dev-1'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 25
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${EC2_HOST:?Missing EC2_HOST}" "${EC2_USER:?Missing EC2_USER}"
+          : "${EC2_SSH_KEY:?Missing EC2_SSH_KEY}" "${EC2_KNOWN_HOSTS:?Missing EC2_KNOWN_HOSTS}"
+          [[ "$EC2_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]
+          [[ "$EC2_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/ec2_key ~/.ssh/known_hosts
+      - name: Upload exact commit and deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="release-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/$archive" HEAD
+          scp -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            "$RUNNER_TEMP/$archive" "$EC2_USER@$EC2_HOST:/opt/fundtech/uploads/$archive"
+          ssh -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            "$EC2_USER@$EC2_HOST" "bash -s -- '$GITHUB_SHA' '$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'" <<'REMOTE'
+          set -euo pipefail
+          revision="$1"
+          run_id="$2"
+          release="/opt/fundtech/releases/$revision-$run_id"
+          mkdir -p "$release"
+          tar -xzf "/opt/fundtech/uploads/release-$revision-$run_id.tar.gz" -C "$release"
+          bash "$release/deploy/ec2-deploy.sh" "$release" "$revision"
+          REMOTE
+      - name: Remove runner SSH key
+        if: always()
+        run: rm -f ~/.ssh/ec2_key
