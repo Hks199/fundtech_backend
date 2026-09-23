@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": "24.x"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -17,7 +17,7 @@
     "kafka:setup": "node dist/scripts/kafka-setup.js",
     "simulate": "node dist/scripts/simulate.js",
     "auth:hash": "node dist/scripts/hash-password.js",
-    "test": "npm run build && node --test --test-isolation=none dist/test/api.test.js dist/test/fifo.test.js"
+    "test": "npm run build && node --test --test-isolation=none dist/test/api.test.js dist/test/fifo.test.js dist/test/lazy-producer.test.js"
   },
   "dependencies": {
     "@neon/config": "^1.7.2",

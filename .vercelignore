@@ -1,0 +1,12 @@
+.env
+.env.*
+.neon
+.agents
+.codex
+.npm-cache
+dist
+node_modules
+*.pem
+*.key
+*.cert
+*.log

@@ -30,7 +30,11 @@ export function createApp(producer: Pick<Producer, 'send'>) {
   app.use(express.json({ limit: '16kb', strict: true }));
   app.use(pinoHttp({ logger, genReqId: req => req.headers['x-request-id']?.toString().slice(0, 100) || randomUUID(),
     serializers: { req: req => ({ method: req.method, url: req.url, id: req.id }), res: res => ({ statusCode: res.statusCode }) } }));
-  app.use(rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-8', legacyHeaders: false }));
+  // Vercel supplies X-Forwarded-For, which Express uses via trust proxy.
+  // Ignore the additional RFC Forwarded header; keep the default IP/IPv6 key
+  // generator and all other rate-limit validations enabled.
+  const rateLimitValidation = { forwardedHeader: false };
+  app.use(rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-8', legacyHeaders: false, validate: rateLimitValidation }));
 
   app.get('/health/live', (_req, res) => res.json({ status: 'ok' }));
   app.get('/health/ready', async (_req, res) => {
@@ -38,7 +42,7 @@ export function createApp(producer: Pick<Producer, 'send'>) {
     catch { res.status(503).json({ status: 'unavailable' }); }
   });
 
-  const loginLimit = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
+  const loginLimit = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, validate: rateLimitValidation });
   app.post('/api/auth/login', loginLimit, async (req, res) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid request' });

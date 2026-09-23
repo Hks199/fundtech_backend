@@ -65,6 +65,10 @@ Malformed Kafka messages go to `inventory-events-invalid`. Database failures sto
 
 ## Deployment settings
 
+### Vercel API deployment
+
+Follow [the Vercel deployment guide](docs/vercel.md) for project settings, environment variables, and verification. `vercel.json` routes requests to `api/index.ts`; the existing API URLs stay the same. **The Kafka consumer must run separately on a persistent host** to process queued events and update inventory.
+
 For Aiven Kafka and Neon PostgreSQL, follow [Aiven Kafka and Neon setup](docs/aiven-neon.md). It includes the exact environment variables, CA certificate handling, topic setup, and migration steps. The earlier [Confluent Cloud guide](docs/managed-services.md) remains available if that provider is used instead.
 
 Set `DATABASE_URL`, `KAFKA_BROKERS`, the managed Kafka SASL settings, `CORS_ORIGINS` to the frontend origin, admin credentials, and `JWT_SECRET` in your deployment's secret settings. Set `NODE_ENV=production`, `DATABASE_SSL=true`, and `KAFKA_SSL=true`. Run migrations and topic setup as deployment jobs, then deploy the API and consumer as long-running services. Put the API behind HTTPS and set `TRUST_PROXY=true` only when there is one trusted reverse proxy. Use separate low-privilege Kafka and database credentials in production.

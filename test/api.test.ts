@@ -15,6 +15,40 @@ process.env.JWT_SECRET = 'test-secret-with-at-least-32-characters';
 const { createApp } = await import('../src/app.js');
 const { pool } = await import('../src/db.js');
 
+test('proxy rate limits use X-Forwarded-For and ignore changing Forwarded headers', async (t) => {
+  const errors = t.mock.method(console, 'error', () => {});
+  const app = createApp({ send: async () => [] });
+  app.set('trust proxy', 1);
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const response = await fetch(`${base}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.10', forwarded: `for=198.51.100.${attempt + 1};proto=https` },
+        body: '{}'
+      });
+      assert.equal(response.status, attempt < 5 ? 400 : 429);
+      await response.text();
+    }
+    const otherClient = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.11', forwarded: 'for=198.51.100.1;proto=https' },
+      body: '{}'
+    });
+    assert.equal(otherClient.status, 400);
+    await otherClient.text();
+    const health = await fetch(`${base}/health/live`, { headers: { 'x-forwarded-for': '203.0.113.10', forwarded: 'for=198.51.100.1' } });
+    assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), { status: 'ok' });
+    assert.equal(errors.mock.callCount(), 0);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    errors.mock.restore();
+  }
+});
+
 test('login protects event publishing and validates input', async () => {
   const sent: unknown[] = [];
   const app = createApp({ send: async message => { sent.push(message); return []; } } satisfies Pick<Producer, 'send'>);
