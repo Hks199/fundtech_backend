@@ -54,21 +54,29 @@ jobs:
           chmod 600 ~/.ssh/ec2_key ~/.ssh/known_hosts
       - name: Upload exact commit and deploy
         shell: bash
+        env:
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
         run: |
           set -euo pipefail
+          test -n "$BACKEND_ENV" || { echo 'Missing BACKEND_ENV secret'; exit 1; }
           archive="release-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
           git archive --format=tar.gz --output="$RUNNER_TEMP/$archive" HEAD
           scp -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
             "$RUNNER_TEMP/$archive" "$EC2_USER@$EC2_HOST:/opt/fundtech/uploads/$archive"
+          # Send secrets over encrypted stdin, never as command arguments or logs.
+          printf '%s\n' "$BACKEND_ENV" | ssh -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            "$EC2_USER@$EC2_HOST" "umask 077; cat > '/opt/fundtech/uploads/env-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'"
           ssh -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
             "$EC2_USER@$EC2_HOST" "bash -s -- '$GITHUB_SHA' '$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'" <<'REMOTE'
           set -euo pipefail
           revision="$1"
           run_id="$2"
+          env_file="/opt/fundtech/uploads/env-$revision-$run_id"
+          trap 'rm -f -- "$env_file"' EXIT
           release="/opt/fundtech/releases/$revision-$run_id"
           mkdir -p "$release"
           tar -xzf "/opt/fundtech/uploads/release-$revision-$run_id.tar.gz" -C "$release"
-          bash "$release/deploy/ec2-deploy.sh" "$release" "$revision"
+          bash "$release/deploy/ec2-deploy.sh" "$release" "$revision" "$env_file"
           REMOTE
       - name: Remove runner SSH key
         if: always()

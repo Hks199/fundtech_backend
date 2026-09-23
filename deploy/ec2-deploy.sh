@@ -6,11 +6,24 @@ revision="${2:?Commit SHA required}"
 [[ "$revision" =~ ^[a-f0-9]{40}$ ]] || exit 1
 release="$(realpath "$release")"
 [[ "$release" == /opt/fundtech/releases/* ]] || exit 1
-test -s /opt/fundtech/shared/.env || { echo 'Create /opt/fundtech/shared/.env first.'; exit 1; }
 
 # Serialize manual deployments as well as Actions deployments.
 exec 9>/opt/fundtech/deploy.lock
 flock -w 900 9
+if [ -n "${3:-}" ]; then
+  incoming_env="$(realpath "$3")"
+  [[ "$incoming_env" == /opt/fundtech/uploads/env-* ]] || exit 1
+  test -s "$incoming_env" || { echo 'Uploaded BACKEND_ENV is empty.'; exit 1; }
+  # Normalize Windows line endings without interpreting $, quotes, or shell code.
+  umask 077
+  staged_env="$(mktemp /opt/fundtech/shared/.env.XXXXXX)"
+  trap 'rm -f -- "$staged_env"' EXIT
+  sed 's/\r$//' "$incoming_env" > "$staged_env"
+  chmod 600 "$staged_env"
+  mv -f "$staged_env" /opt/fundtech/shared/.env
+  rm -f -- "$incoming_env"
+fi
+test -s /opt/fundtech/shared/.env || { echo 'Configure the BACKEND_ENV GitHub secret first.'; exit 1; }
 cd "$release"
 ln -s /opt/fundtech/shared/.env .env
 export IMAGE_TAG="$revision"

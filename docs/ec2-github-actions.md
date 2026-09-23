@@ -4,7 +4,7 @@ This setup runs the API and Kafka consumer continuously on one EC2 instance. Ngi
 
 ## 1. Create the EC2 instance
 
-Use Ubuntu Server 24.04 LTS, an x86_64 instance with at least 2 GB RAM for the on-host Docker build, and approximately 30 GB of disk. Attach an Elastic IP so DNS and SSH remain stable. Create an SSH key pair and keep its private key locally.
+Use Ubuntu Server 24.04 or 26.04 LTS, an x86_64 instance with at least 2 GB RAM for the on-host Docker build, and approximately 30 GB of disk. The provisioning script uses the matching Docker repository (noble or resolute). Attach an Elastic IP so DNS and SSH remain stable. Create an SSH key pair and keep its private key locally.
 
 Security group inbound rules:
 
@@ -37,17 +37,11 @@ exit
 
 Reconnect, then verify `docker version` and `docker compose version`. Compose must be version 2.30 or newer because the environment file uses raw values. Membership in the Docker group grants administrative control of the host; use a dedicated instance for this application.
 
-## 3. Configure production secrets on EC2
+## 3. Configure the BACKEND_ENV GitHub secret
 
-On EC2:
+Create a GitHub Actions secret named `BACKEND_ENV` containing the entire production environment file. Use the values from your working managed-service configuration, not localhost services. Put raw `KEY=value` entries in this multiline secret, without quotes or inline comments. Docker reads it in raw mode so the `$` characters in password hashes stay intact.
 
-```bash
-umask 077
-nano /opt/fundtech/shared/.env
-chmod 600 /opt/fundtech/shared/.env
-```
-
-Use the values from your working managed-service configuration, not localhost services. Put raw `KEY=value` entries in this file, without quotes or inline comments. Docker reads it in raw mode so the `$` characters in password hashes stay intact.
+Each deployment sends this secret over SSH stdin and installs `/opt/fundtech/shared/.env` with permission 600 under the deployment lock. Windows line endings are normalized. You do not need to create the environment file manually on EC2. The secret is never sourced as a shell script or included in the Docker image. It remains on disk on EC2 for container restarts; updates replace it before building/deploying, so even a failed deployment can update the shared file.
 
 ```dotenv
 NODE_ENV=production
@@ -108,6 +102,7 @@ Create a GitHub environment named `production` under repository Settings → Env
 | `EC2_USER` | `ubuntu` |
 | `EC2_SSH_KEY` | Entire private `github-ec2-deploy` file, including BEGIN/END lines |
 | `EC2_KNOWN_HOSTS` | Verified SSH host-key entry described below |
+| `BACKEND_ENV` | Complete production environment contents from step 3 |
 
 For `EC2_KNOWN_HOSTS`, use the EC2 console or an already trusted SSH connection to run:
 
@@ -147,7 +142,7 @@ docker compose -p fundtech --env-file /dev/null -f compose.ec2.yaml ps
 docker compose -p fundtech --env-file /dev/null -f compose.ec2.yaml logs --tail=100 consumer
 ```
 
-Look for `Consumer started` and `Event processed`. Stop any old local consumer only once the EC2 worker is verified. Changes to the shared environment require recreating the containers, for example by triggering a new deployment.
+Look for `Consumer started` and `Event processed`. Stop any old local consumer only once the EC2 worker is verified. To change environment values, update `BACKEND_ENV` in GitHub and trigger a new deployment; manual server edits are overwritten.
 
 ## Failure handling and rollback
 
