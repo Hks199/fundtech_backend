@@ -55,17 +55,35 @@ jobs:
       - name: Upload exact commit and deploy
         shell: bash
         env:
-          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          KAFKA_BROKERS: ${{ secrets.KAFKA_BROKERS }}
+          KAFKA_CLIENT_ID: ${{ secrets.KAFKA_CLIENT_ID }}
+          KAFKA_GROUP_ID: ${{ secrets.KAFKA_GROUP_ID }}
+          KAFKA_TOPIC: ${{ secrets.KAFKA_TOPIC }}
+          KAFKA_TOPIC_PARTITIONS: ${{ secrets.KAFKA_TOPIC_PARTITIONS }}
+          KAFKA_SASL_MECHANISM: ${{ secrets.KAFKA_SASL_MECHANISM }}
+          KAFKA_SASL_USERNAME: ${{ secrets.KAFKA_SASL_USERNAME }}
+          KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD }}
+          KAFKA_CA_CERT_BASE64: ${{ secrets.KAFKA_CA_CERT_BASE64 }}
+          KAFKA_CLIENT_CERT_BASE64: ${{ secrets.KAFKA_CLIENT_CERT_BASE64 }}
+          KAFKA_CLIENT_KEY_BASE64: ${{ secrets.KAFKA_CLIENT_KEY_BASE64 }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
         run: |
           set -euo pipefail
-          test -n "$BACKEND_ENV" || { echo 'Missing BACKEND_ENV secret'; exit 1; }
+          python3 deploy/render-env.py "$RUNNER_TEMP/backend.env"
           archive="release-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
           git archive --format=tar.gz --output="$RUNNER_TEMP/$archive" HEAD
           scp -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
             "$RUNNER_TEMP/$archive" "$EC2_USER@$EC2_HOST:/opt/fundtech/uploads/$archive"
           # Send secrets over encrypted stdin, never as command arguments or logs.
-          printf '%s\n' "$BACKEND_ENV" | ssh -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
-            "$EC2_USER@$EC2_HOST" "umask 077; cat > '/opt/fundtech/uploads/env-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'"
+          ssh -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            "$EC2_USER@$EC2_HOST" "umask 077; cat > '/opt/fundtech/uploads/env-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'" < "$RUNNER_TEMP/backend.env"
           ssh -i ~/.ssh/ec2_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
             "$EC2_USER@$EC2_HOST" "bash -s -- '$GITHUB_SHA' '$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'" <<'REMOTE'
           set -euo pipefail
@@ -80,4 +98,4 @@ jobs:
           REMOTE
       - name: Remove runner SSH key
         if: always()
-        run: rm -f ~/.ssh/ec2_key
+        run: rm -f ~/.ssh/ec2_key "$RUNNER_TEMP/backend.env"

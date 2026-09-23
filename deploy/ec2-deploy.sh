@@ -13,7 +13,7 @@ flock -w 900 9
 if [ -n "${3:-}" ]; then
   incoming_env="$(realpath "$3")"
   [[ "$incoming_env" == /opt/fundtech/uploads/env-* ]] || exit 1
-  test -s "$incoming_env" || { echo 'Uploaded BACKEND_ENV is empty.'; exit 1; }
+  test -s "$incoming_env" || { echo 'Uploaded application configuration is empty.'; exit 1; }
   # Normalize Windows line endings without interpreting $, quotes, or shell code.
   umask 077
   staged_env="$(mktemp /opt/fundtech/shared/.env.XXXXXX)"
@@ -23,7 +23,7 @@ if [ -n "${3:-}" ]; then
   mv -f "$staged_env" /opt/fundtech/shared/.env
   rm -f -- "$incoming_env"
 fi
-test -s /opt/fundtech/shared/.env || { echo 'Configure the BACKEND_ENV GitHub secret first.'; exit 1; }
+test -s /opt/fundtech/shared/.env || { echo 'Deploy through GitHub Actions with the individual application secrets configured.'; exit 1; }
 cd "$release"
 ln -s /opt/fundtech/shared/.env .env
 export IMAGE_TAG="$revision"

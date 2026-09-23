@@ -37,11 +37,17 @@ exit
 
 Reconnect, then verify `docker version` and `docker compose version`. Compose must be version 2.30 or newer because the environment file uses raw values. Membership in the Docker group grants administrative control of the host; use a dedicated instance for this application.
 
-## 3. Configure the BACKEND_ENV GitHub secret
+## 3. Configure individual GitHub application secrets
 
-Create a GitHub Actions secret named `BACKEND_ENV` containing the entire production environment file. Use the values from your working managed-service configuration, not localhost services. Put raw `KEY=value` entries in this multiline secret, without quotes or inline comments. Docker reads it in raw mode so the `$` characters in password hashes stay intact.
+Create each production variable as a separate GitHub Actions secret, using exactly the same name as in `.env`. For example, the `DATABASE_URL` secret contains only its connection URL, without `DATABASE_URL=` or surrounding quotes. A combined `BACKEND_ENV` secret is no longer used.
 
-Each deployment sends this secret over SSH stdin and installs `/opt/fundtech/shared/.env` with permission 600 under the deployment lock. Windows line endings are normalized. You do not need to create the environment file manually on EC2. The secret is never sourced as a shell script or included in the Docker image. It remains on disk on EC2 for container restarts; updates replace it before building/deploying, so even a failed deployment can update the shared file.
+Required application secrets: `DATABASE_URL`, `KAFKA_BROKERS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `JWT_SECRET`, and `CORS_ORIGINS`.
+
+Also configure your provider's Kafka authentication and certificate secrets listed below. Optional secrets are omitted when empty, allowing application defaults. The workflow fixes `NODE_ENV=production`, `PORT=3000`, `DATABASE_SSL=true`, `KAFKA_SSL=true`, and `TRUST_PROXY=true`; corresponding GitHub secrets are not needed and are not read.
+
+Each deployment builds a restricted temporary environment file, uploads it through SSH stdin, and installs `/opt/fundtech/shared/.env` with permission 600 under the deployment lock. Values are never sourced as shell code or included in the image. Multiline values are rejected; use single-line base64 for certificates. The shared file is replaced before building, so a failed deployment can still update it. You do not need to create it manually on EC2.
+
+The following illustrates the final generated environment file, not a combined secret to create:
 
 ```dotenv
 NODE_ENV=production
@@ -102,7 +108,7 @@ Create a GitHub environment named `production` under repository Settings → Env
 | `EC2_USER` | `ubuntu` |
 | `EC2_SSH_KEY` | Entire private `github-ec2-deploy` file, including BEGIN/END lines |
 | `EC2_KNOWN_HOSTS` | Verified SSH host-key entry described below |
-| `BACKEND_ENV` | Complete production environment contents from step 3 |
+| Individual application secrets | Each variable from step 3, saved separately |
 
 For `EC2_KNOWN_HOSTS`, use the EC2 console or an already trusted SSH connection to run:
 
@@ -142,7 +148,7 @@ docker compose -p fundtech --env-file /dev/null -f compose.ec2.yaml ps
 docker compose -p fundtech --env-file /dev/null -f compose.ec2.yaml logs --tail=100 consumer
 ```
 
-Look for `Consumer started` and `Event processed`. Stop any old local consumer only once the EC2 worker is verified. To change environment values, update `BACKEND_ENV` in GitHub and trigger a new deployment; manual server edits are overwritten.
+Look for `Consumer started` and `Event processed`. Stop any old local consumer only once the EC2 worker is verified. To change environment values, update the individual application secrets in GitHub and trigger a new deployment; manual server edits are overwritten.
 
 ## Failure handling and rollback
 
